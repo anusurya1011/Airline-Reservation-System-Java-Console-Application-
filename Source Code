@@ -1,0 +1,396 @@
+import java.io.*;
+import java.time.*;
+import java.time.format.*;
+import java.util.*;
+
+public class AirlineManagementSystem {
+    private static final String BOOKINGS_FILE = "bookings.txt";
+    private static final int MAX_BOOKING_MONTHS = 2;
+    private static final Set<String> VALID_AIRPORT_CITIES = new HashSet<>(Arrays.asList(
+        "Chennai", "Madurai", "Bangalore", "Delhi", "Mumbai", "Hyderabad", "Kolkata", "Kochi", "Pune", "Goa"
+    ));
+    private static final Map<String, String> bookings = new LinkedHashMap<>();
+    private static final Map<String, List<Seat>> flightSeats = new HashMap<>();
+
+    static {
+        // Initialize seat availability for flights
+        flightSeats.put("1", new ArrayList<>(Arrays.asList(new Seat("32A", 4500), new Seat("32B", 4000), new Seat("32C", 4000), new Seat("32D", 4000), new Seat("32E", 4000))));
+        flightSeats.put("2", new ArrayList<>(Arrays.asList(new Seat("40G", 4500), new Seat("40H", 4000), new Seat("40J", 4000))));
+        flightSeats.put("3", new ArrayList<>(Arrays.asList(new Seat("41A", 4500), new Seat("41B", 4000), new Seat("41C", 4000))));
+        flightSeats.put("4", new ArrayList<>(Arrays.asList(new Seat("50A", 4500), new Seat("50B", 4000), new Seat("50C", 4000), new Seat("50D", 4000), new Seat("50E", 4000))));
+    }
+
+    public static void main(String[] args) {
+        loadBookings();
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Welcome to Vistara Airline Management System");
+        System.out.println("Hi there, keep flying, keep saving, keep booking on goVistara.in\n");
+
+        while (true) {
+            System.out.println("1. Book a Flight");
+            System.out.println("2. View Bookings");
+            System.out.println("3. Cancel a Booking");
+            System.out.println("4. Exit");
+            System.out.print("Enter your choice: ");
+            
+            int choice = getValidIntegerInput(scanner);
+
+            switch (choice) {
+                case 1:
+                    bookFlight(scanner);
+                    break;
+                case 2:
+                    viewBookings();
+                    break;
+                case 3:
+                    cancelBooking(scanner);
+                    break;
+                case 4:
+                    System.out.println("Thank you for using Vistara Airline Management System. Safe travels!");
+                    scanner.close();
+                    return;
+                default:
+                    System.out.println("Invalid choice. Please try again.");
+            }
+        }
+    }
+
+    private static int getValidIntegerInput(Scanner scanner) {
+        while (true) {
+            try {
+                return Integer.parseInt(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.print("Invalid input. Please enter a valid integer: ");
+            }
+        }
+    }
+
+    private static void viewBookings() {
+        if (bookings.isEmpty()) {
+            System.out.println("No bookings found.");
+            return;
+        }
+        System.out.println("Your Bookings:");
+        for (Map.Entry<String, String> entry : bookings.entrySet()) {
+            System.out.println("PNR: " + entry.getKey() + " -> " + entry.getValue());
+        }
+    }
+
+    private static void cancelBooking(Scanner scanner) {
+        System.out.print("Enter PNR to cancel booking: ");
+        String pnr = scanner.nextLine().trim();
+        if (bookings.containsKey(pnr)) {
+            bookings.remove(pnr);
+            saveBookings();
+            System.out.println("Booking with PNR " + pnr + " has been canceled.");
+        } else {
+            System.out.println("PNR not found. Please enter a valid PNR.");
+        }
+    }
+
+    private static String generatePNR() {
+        return "PNR" + new Random().nextInt(1000000);
+    }
+
+    private static void bookFlight(Scanner scanner) {
+        System.out.println("Booking a flight...");
+        
+        System.out.print("Enter boarding airport city: ");
+        String fromAirport = getValidAirportCity(scanner);
+        System.out.print("Enter destination airport city: ");
+        String toAirport = getValidAirportCity(scanner);
+        
+        System.out.print("Enter departure date (DD/MM/YYYY): ");
+        String date = scanner.nextLine();
+        
+        if (!isValidBookingDate(date)) {
+            System.out.println("Invalid booking date. You can only book flights up to " + MAX_BOOKING_MONTHS + " months in advance.");
+            return;
+        }
+        
+        System.out.print("Enter trip type (One Way / Round Trip / Multi City): ");
+        String tripType = scanner.nextLine();
+        
+        System.out.println("Looking for available flights...");
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        System.out.println("Available Flights:");
+        System.out.println("1. Airbus A320 - 5 seats available");
+        System.out.println("2. Airbus A321 - Fully booked");
+        System.out.println("3. Dream liner - 3 seats available");
+        System.out.println("4. Boeing 787-9 - 7 seats available");
+        
+        System.out.print("Choose a flight (1-4): ");
+        int flightChoice = getValidIntegerInput(scanner);
+        
+        if (flightChoice == 2) {
+            System.out.println("Sorry, Flight B is fully booked. Please choose another flight.");
+            return;
+        }
+
+        // Show available seats for the selected flight
+        showAvailableSeats(String.valueOf(flightChoice));
+
+        // Ask user to select the number of passengers
+        System.out.print("Enter number of passengers: ");
+        int passengers = getValidIntegerInput(scanner);
+        
+        // Check available seats
+        List<Seat> availableSeats = flightSeats.get(String.valueOf(flightChoice));
+        if (availableSeats.size() < passengers) {
+            System.out.println("Not enough seats available. Please select a valid number of seats.");
+            return;
+        }
+
+        // Ask user to select seats
+        List<Seat> selectedSeats = new ArrayList<>();
+        for (int i = 0; i < passengers; i++) {
+            System.out.print("Select seat " + (i + 1) + " from the available options: ");
+            String selectedSeatNumber = scanner.nextLine().trim();
+            Seat selectedSeat = selectSeat(String.valueOf(flightChoice), selectedSeatNumber);
+
+            if (selectedSeat == null) {
+                System.out.println("Invalid seat selection. Please try again.");
+                i--; // Decrement i to allow re-selection
+            } else {
+                selectedSeats.add(selectedSeat);
+            }
+        }
+
+        // Collect passenger details
+        List<Passenger> passengersList = new ArrayList<>();
+        for (int i = 0; i < selectedSeats.size(); i++) {
+            System.out.println("Enter details for passenger " + (i + 1) + ":");
+            System.out.print("Name: ");
+            String name = scanner.nextLine();
+            System.out.print("Date of Birth (DD/MM/YYYY): ");
+            String dob = scanner.nextLine();
+            System.out.print("Gender (M/F): ");
+            String gender = scanner.nextLine();
+            System.out.print("Mobile No: ");
+            String mobile = scanner.nextLine();
+            System.out.print("Email ID: ");
+            String email = scanner.nextLine();
+            passengersList.add(new Passenger(name, dob, gender, mobile, email));
+        }
+
+        // Handle round trip
+        String returnDate = "";
+        if (tripType.equalsIgnoreCase("Round Trip")) {
+            System.out.print("Enter return date (DD/MM/YYYY): ");
+            returnDate = scanner.nextLine();
+            if (!isValidBookingDate(returnDate)) {
+                System.out.println("Invalid return date. You can only book flights up to " + MAX_BOOKING_MONTHS + " months in advance.");
+                return;
+            }
+        }
+
+        // Calculate total amount
+        int totalAmount = selectedSeats.stream().mapToInt(Seat::getPrice).sum();
+        System.out.println("Total amount: " + totalAmount + " INR");
+
+        // Meal selection
+        System.out.println("Meal options:");
+        System.out.println("1. Pizza (Regular Veg) - 300 INR");
+        System.out.println("2. Sandwich (Veg) - 400 INR");
+        System.out.println("3. Sandwich (Non-Veg) - 500 INR");
+        System.out.println("4. Meal (Veg) - 900 INR");
+        System.out.println("5. Meal (Non-Veg) - 1300 INR");
+        System.out.println("6. Skip");
+        System.out.print("Select a meal option (1-6): ");
+        int mealChoice = getValidIntegerInput(scanner);
+        int mealCost = 0;
+
+        switch (mealChoice) {
+            case 1:
+                mealCost = 300;
+                break;
+            case 2:
+                mealCost = 400;
+                break;
+            case 3:
+                mealCost = 500;
+                break;
+            case 4:
+                mealCost = 900;
+                break;
+            case 5:
+                mealCost = 1300;
+                break;
+            case 6:
+                System.out.println("No meal selected.");
+                break;
+            default:
+                System.out.println("Invalid choice. No meal selected.");
+                break;
+        }
+
+        totalAmount += mealCost; // Add meal cost to total amount
+        System.out.println("Total amount after meal selection: " + totalAmount + " INR");
+
+        // Baggage details
+        System.out.println("Baggage details: 15 kg checked baggage and 7 kg hand luggage.");
+
+        // Payment method selection
+        System.out.print("Pay with (UPI/Net Banking/Cards/Wallet): ");
+        String paymentMethod = scanner.nextLine();
+        while (!isValidPaymentMethod(paymentMethod)) {
+            System.out.print("Invalid payment method. Please enter UPI, Net Banking, Cards, or Wallet: ");
+            paymentMethod = scanner.nextLine();
+        }
+
+        // Collect payment details based on the selected method
+        switch (paymentMethod.toLowerCase()) {
+            case "upi":
+                System.out.print("Enter your UPI ID: ");
+                String upiId = scanner.nextLine();
+                break;
+            case "net banking":
+                System.out.print("Enter your name: ");
+                String name = scanner.nextLine();
+                System.out.print("Enter your bank name: ");
+                String bankName = scanner.nextLine();
+                System.out.print("Enter your account number: ");
+                String accountNumber = scanner.nextLine();
+                break;
+            case "cards":
+                System.out.print("Enter the name on the card: ");
+                String cardName = scanner.nextLine();
+                System.out.print("Enter the card number: ");
+                String cardNumber = scanner.nextLine();
+                System.out.print("Enter the CVV number: ");
+                String cvv = scanner.nextLine();
+                break;
+            case "wallet":
+                System.out.println("Your wallet balance is: 5000 INR");
+                break;
+        }
+
+        String pnr = generatePNR();
+        StringBuilder bookingDetails = new StringBuilder(fromAirport + " -> " + toAirport + ", " + date + ", " + tripType + ", " + passengers + " pax, ");
+        for (Seat seat : selectedSeats) {
+            bookingDetails.append(seat.getSeatNumber()).append(" (Price: ").append(seat.getPrice()).append(" INR), ");
+        }
+        bookingDetails.append("Total Amount: ").append(totalAmount).append(" INR, Paid via: ").append(paymentMethod);
+        if (!returnDate.isEmpty()) {
+            bookingDetails.append(", Return Date: ").append(returnDate);
+        }
+
+        bookings.put(pnr, bookingDetails.toString());
+        saveBookings();
+        System.out.println("Flight booked successfully! Your PNR: " + pnr);
+    }
+
+    private static void showAvailableSeats(String flightId) {
+        System.out.println("Available Seats for Flight " + flightId + ":");
+        List<Seat> seats = flightSeats.get(flightId);
+        for (Seat seat : seats) {
+            System.out.println(seat.getSeatNumber() + " - Price: " + seat.getPrice() + " INR");
+        }
+    }
+
+    private static Seat selectSeat(String flightId, String seatNumber) {
+        List<Seat> seats = flightSeats.get(flightId);
+        for (Seat seat : seats) {
+            if (seat.getSeatNumber().equalsIgnoreCase(seatNumber)) {
+                // Remove the seat from available seats (simulate booking)
+                seats.remove(seat);
+                return seat;
+            }
+        }
+        return null; // Seat not found
+    }
+
+    private static String getValidAirportCity(Scanner scanner) {
+        String city;
+        while (true) {
+            city = scanner.nextLine().trim();
+            if (VALID_AIRPORT_CITIES.contains(city)) {
+                return city;
+            } else {
+                System.out.print("Invalid airport city. Please enter a valid city: ");
+            }
+        }
+    }
+
+    private static boolean isValidPaymentMethod(String method) {
+        return method.equalsIgnoreCase("UPI") || method.equalsIgnoreCase("Net Banking") || method.equalsIgnoreCase("Cards") || method.equalsIgnoreCase("Wallet");
+    }
+
+    private static boolean isValidBookingDate(String date) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        try {
+            LocalDate bookingDate = LocalDate.parse(date, formatter);
+            LocalDate currentDate = LocalDate.now();
+            LocalDate maxBookingDate = currentDate.plusMonths(MAX_BOOKING_MONTHS);
+            return !bookingDate.isBefore(currentDate) && !bookingDate.isAfter(maxBookingDate);
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    private static void loadBookings() {
+        try (BufferedReader reader = new BufferedReader(new FileReader(BOOKINGS_FILE))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(";");
+                if (parts.length == 2) {
+                    bookings.put(parts[0], parts[1]);
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error loading bookings: " + e.getMessage());
+        }
+    }
+
+    private static void saveBookings() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(BOOKINGS_FILE))) {
+            for (Map.Entry<String, String> entry : bookings.entrySet()) {
+                writer.write(entry.getKey() + ";" + entry.getValue());
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            System.out.println("Error saving bookings: " + e.getMessage());
+        }
+    }
+}
+
+class Seat {
+    private String seatNumber;
+    private int price;
+
+    public Seat(String seatNumber, int price) {
+        this.seatNumber = seatNumber;
+        this.price = price;
+    }
+
+    public String getSeatNumber() {
+        return seatNumber;
+    }
+
+    public int getPrice() {
+        return price;
+    }
+}
+
+class Passenger {
+    private String name;
+    private String dob;
+    private String gender;
+    private String mobile;
+    private String email;
+
+    public Passenger(String name, String dob, String gender, String mobile, String email) {
+        this.name = name;
+        this.dob = dob;
+        this.gender = gender;
+        this.mobile = mobile;
+        this.email = email;
+    }
+
+    // Getters and setters can be added here if needed
+}
